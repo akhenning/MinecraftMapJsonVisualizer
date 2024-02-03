@@ -1,48 +1,31 @@
 package imagifier;
 
-import java.io.FileReader;
-import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Scanner;
 
 import javax.imageio.ImageIO;
 
 
 /**
- * Class that contains the main method for the program and creates the frame
- * containing the component.
+* I put everything into the main method (and thereby one file) because I'm used to Python and it is really short
  * 
- * @author @henning
- * @version 5/13/21
+ * @author @ahenning
+ * @version 1/31/24
  */
 
 public class Main {
 	
-	// Default values, will not normally be used
-	boolean recalculate = true;
-	boolean recalculate_avg = true;
-	boolean recalculate_hue = true;
-	boolean do_average = true;
-	int precision = 3;
 	static int pixels_per_tile = 16;
-	static int width = 129;
+	static int width = 128;
 	static int height = 129;
-	boolean do_any_corrections = true;
-	/**
-	 * main method for the program which creates and configures the frame for the
-	 * program
-	 *
-	 */
+	static int height_of_lowest_block = 64;
+	static String count_direction = "from bottom";
 	public static void main(String[] args) {
 		System.out.println("Starting");
 		File file = null;
@@ -51,7 +34,6 @@ public class Main {
 		try {
 			file = new File("input json/input.json");
 			in = new FileInputStream(file);
-			// out = new FileOutputStream("stages/1.txt");
 
 			byte[] data = new byte[(int) file.length()];
 			in.read(data);
@@ -95,7 +77,7 @@ public class Main {
 			//System.out.println(name+","+x_str+","+y_str+","+z_str);
 			try {
 				int x = Integer.parseInt(x_str);
-				int y = Integer.parseInt(y_str);
+				int y = Integer.parseInt(y_str) + height_of_lowest_block;
 				int z = Integer.parseInt(z_str);
 				if (data[x][z] != null && data[x][z].y > y) {
 					// Don't save if there is already something here and it is higher than the current block
@@ -118,11 +100,7 @@ public class Main {
 
 		System.out.println("Minimum Y value: "+minY);
 		System.out.println("Maximum Y value: "+maxY);
-		System.out.println("All blocks in it: "+all_blocks.toString());
-		//for (int i = 0; i < all_blocks.size();i+=1) {
-		//	if (all_blocks.get(i).contains("wool"))
-		//}
-
+		System.out.println("All blocks in schema: "+all_blocks.toString());
 		
 		/*
 		for (BlockInfo[] arr: data) {
@@ -149,22 +127,27 @@ public class Main {
 
 		try {
 			File output = new File("output/result.png");
-			for (int i = 0; i < 129; i+=1) {
-				for (int j = 0; j < 129; j+=1) {
+			for (int i = 0; i < width; i+=1) {
+				for (int j = 0; j < height; j+=1) {
 					if (data[i][j] != null){
 						graphic2D.drawImage(map.get(data[i][j].name).texture, i*16, j*16, null);
 
-						if (j > 0) {
-							int diff = data[i][j].y-data[i][j-1].y;
-							if (diff == 1) {
-								graphic2D.drawImage(map.get("plus").texture, i*16, j*16, null);
-							} else if (diff > 1) {
-								graphic2D.drawImage(map.get("double_plus").texture, i*16, j*16, null);
-							} else if (diff == -1) {
-								graphic2D.drawImage(map.get("minus").texture, i*16, j*16, null);
-							} else if (diff < -1) {
-								graphic2D.drawImage(map.get("double_minus").texture, i*16, j*16, null);
-							}
+						int diff = 0;
+						if (count_direction == "from top" && j > 0) {
+							diff = data[i][j].y-data[i][j-1].y;
+						} else if (count_direction == "from bottom" && j < height-1) {
+							diff = data[i][j].y-data[i][j+1].y;
+						}
+						if (diff == 1) {
+							graphic2D.drawImage(map.get("plus").texture, i*16, j*16, null);
+						} else if (diff > 1) {
+							graphic2D.drawImage(map.get("double_plus").texture, i*16, j*16, null);
+							System.out.println("Notice: Jump of more than one block at "+i+", "+j+". New Y: "+data[i][j].y);
+						} else if (diff == -1) {
+							graphic2D.drawImage(map.get("minus").texture, i*16, j*16, null);
+						} else if (diff < -1) {
+							graphic2D.drawImage(map.get("double_minus").texture, i*16, j*16, null);
+							System.out.println("Notice: Drop of more than one block at "+i+", "+j+". New Y: "+data[i][j].y);
 						}
 					} else {
 						System.out.println("Nothing at "+i+", "+j+" for some reason");
@@ -176,57 +159,36 @@ public class Main {
 			System.out.println(log);
 		}
 		System.out.println("Finished building output image.");
-		/*
-		try {
-            
-			// todo
-			// This is for matching target to thingies?
-			for (int i = 0; i < in.getWidth() - (pixels_per_tile / 2); i += pixels_per_tile) {
-				for (int j = 0; j < in.getHeight() - (pixels_per_tile / 2); j += pixels_per_tile) {
-					color = in.getRGB(i + (pixels_per_tile / 2), j + (pixels_per_tile / 2));
-					rgb[2] = color & 0xff;
-					rgb[1] = (color & 0xff00) >> 8;
-					rgb[0] = (color & 0xff0000) >> 16;
-					int a = ((color & 0xff000000) >> 24);
-					if (a != -1 && a < 10) {
-						continue;
-					}
-					String result = "";
-					if (do_average) {
-						result = closest(rgb);
-						//System.out.println("In target file, for RGB " + rgb[0] + " " + rgb[1] + " " + rgb[2] + " " + a
-						//		+ ", closest match is " + result);
-					} else {
-						Color.RGBtoHSB(rgb[0],rgb[1],rgb[2], hue);
-						result = closest(hue);
-						System.out.println("In target file, for hue " + hue[0] + " " + hue[1] + " " + hue[2] + " " + a
-								+ ", closest match is " + result);
-					}
-					if (result == "") {
-						System.out.println("WARNING: No good match (usually no matching dominant color).");
-						continue;
-					}
-					BufferedImage tile = null;
-					try {
-						tile = ImageIO.read(new File("images/" + result));
-					} catch (IOException e) {
-						System.out
-								.println("ERROR: Could not open file " + result + ". Info: " + e.getLocalizedMessage());
-						return -1;
-					}
-					//System.out.println("Writing to image file, at location "+(int)((float)i * ((float)width / (float)pixels_per_tile))+", "+( j * (height / pixels_per_tile)));
-					//System.out.println(i+" "+j+" "+width+" "+height+" "+pixels_per_tile);
-				}
+
+		System.out.println("Y values of top of image, in format [x,y]:");
+		for (int i = 0; i < width; i+=1) {
+			System.out.print("["+i+","+ data[i][1].y+"]");
+			if (i != width-1) {
+				System.out.print(",");
 			}
-			System.out.println("Writing to image.");
-			
-			ImageIO.write(image, "png", output);
-		} catch (IOException log) {
-			System.out.println(log);
 		}
-		System.out.println("Finished building output image.");
-		return 1;*/
-      
+		System.out.println("\n");
+
+
+		Map<Integer, Integer> heightMap = new HashMap<Integer, Integer>();
+
+		System.out.println("Y values of bottom of image, in format [x,y]:");
+		for (int i = 0; i < width; i+=1) {
+			System.out.print("["+i+","+ data[i][height-1].y+"]");
+			if (i != width-1) {
+				System.out.print(",");
+			}
+			if (heightMap.containsKey(data[i][height-1].y)) {
+				heightMap.put(data[i][height-1].y,heightMap.get(data[i][height-1].y) + 1);
+			} else {
+				heightMap.put(data[i][height-1].y,1);
+			}
+		}
+		System.out.println("\n");
+
+		System.out.println("Occurences of each height at bottom of image: \n"+heightMap.toString());
+
+		
 	}
 
 }
@@ -252,7 +214,11 @@ class BlockImage {
 		try {
 			texture = ImageIO.read(new File("images/" + block+".png"));
 		} catch (IOException e) {
-			System.out.println("ERROR: Could not open file " + block + ". Info: " + e.getLocalizedMessage());
+			try {
+				texture = ImageIO.read(new File("images/" + block+"_top.png"));
+			} catch (IOException e2) {
+				System.out.println("ERROR: Could not open file " + block + ". Info: " + e.getLocalizedMessage());
+			}
 		}
 	}
 	public String toString() {
